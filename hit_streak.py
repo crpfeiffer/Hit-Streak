@@ -58,11 +58,16 @@ def get_live_lineups():
             era_matches = re.findall(r'(\d*\.\d+)', full_text)
             p_era = float(era_matches[-1]) if era_matches else 0.0
 
+            # --- FIX FOR MISSING PITCHER NAMES ---
             name_tag = div.find('a')
             if name_tag:
-                p_name = name_tag.get('title', name_tag.text).split(' Stats')[0].strip()
+                raw_name = name_tag.get('title', name_tag.text)
+                p_name = raw_name.replace(' Stats', '').replace(' Statistics', '').strip()
             else:
                 p_name = re.split(r'[\(\d]', full_text)[0].strip()
+
+            if not p_name:
+                p_name = "Unknown Pitcher"
 
             return p_name, p_era
 
@@ -95,12 +100,11 @@ def send_email(html_content):
         print("⚠️ Missing email configuration variables. Skipping email.")
         return
 
-    # Split recipient list safely via commas
     recipient_list = [email.strip() for email in to_email_string.split(',') if email.strip()]
 
     message = Mail(
-        from_email=recipient_list[0],  # Must match your verified SendGrid identity
-        to_emails=recipient_list,      # Dynamic array of recipients
+        from_email=recipient_list[0],  
+        to_emails=recipient_list,      
         subject='💣 Daily MLB HR Alerts & Matchups',
         html_content=html_content
     )
@@ -115,7 +119,6 @@ def run_app():
     df_s = get_live_streaks()
     df_l = get_live_lineups()
 
-    # --- Start building HTML Layout and Embedded CSS UI ---
     email_html = """
     <html>
     <head>
