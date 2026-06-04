@@ -42,73 +42,63 @@ def get_live_lineups():
     soup = BeautifulSoup(res.text, 'html.parser')
     matchups = []
 
-    game_boxes = soup.find_all('div', class_='lineup__box')
+    game_boxes = soup.select('.lineup__box')
     print(f"📊 Scanning {len(game_boxes)} games...")
 
     for box in game_boxes:
-        teams = box.find_all('div', class_='lineup__team')
+        # Get Clean Team Abbreviations
+        teams = box.select('.lineup__team')
         v_team = teams[0].text.strip() if len(teams) > 0 else "VIS"
         h_team = teams[1].text.strip() if len(teams) > 1 else "HOME"
 
-        # Locate pitcher components explicitly
-        p_divs = box.find_all('div', class_=re.compile('lineup__player-highlight'))
-        if len(p_divs) < 2: continue
+        # Locate Pitcher List Items explicitly via RotoWire Layout Structure
+        p_items = box.select('li.lineup__player-highlight')
+        if len(p_items) < 2: 
+            continue
 
-        def parse_pitcher_data(div):
-            # 1. Isolate the name using an explicit tag tree fallback
-            p_name = ""
-            a_tag = div.find('a')
-            if a_tag:
-                # Read title attribute if present, otherwise read visible string text
-                raw_name = a_tag.get('title', a_tag.text)
-                p_name = raw_name.replace(' Stats', '').replace(' Statistics', '').strip()
+        def parse_pitcher(li_element):
+            full_text = li_element.get_text(separator=" ", strip=True)
             
-            # If no anchor link exists, scan child components or raw text nodes
-            if not p_name:
-                name_div = div.find('div', class_='lineup__player-name')
-                if name_div:
-                    p_name = name_div.text.strip()
-            
-            # Absolute text-processing fallback if layout patterns shift entirely
-            if not p_name:
-                full_text = div.get_text(separator=" ", strip=True)
-                clean_text = full_text.replace('Expected Starter', '').replace('Confirmed Starter', '')
-                parts = re.split(r'[\(\d]', clean_text)
-                p_name = parts[0].strip()
-
-            # Clean off trailing hand indicators (' R' or ' L') safely if present
-            if p_name.endswith((' R', ' L')):
-                p_name = p_name[:-2].strip()
-
-            if not p_name or len(p_name) < 3:
-                p_name = "Unknown Pitcher"
-
-            # 2. Extract ERA safely using regular expression matching
-            full_text = div.get_text(separator=" ", strip=True)
+            # Extract ERA value securely
             era_matches = re.findall(r'(\d*\.\d+)', full_text)
             p_era = float(era_matches[-1]) if era_matches else 0.0
 
-            return p_name, p_era
+            # Isolate Name anchor
+            a_tag = li_element.find('a')
+            if a_tag:
+                p_name = a_tag.text.strip()
+            else:
+                # Text split cleanup fallback if anchor missing
+                clean_text = re.sub(r'(Expected Starter|Confirmed Starter|Stats|Statistics)', '', full_text, flags=re.IGNORECASE)
+                p_name = re.split(r'[\(\d]', clean_text)[0].strip()
 
-        v_p_name, v_p_era = parse_pitcher_data(p_divs[0])
-        h_p_name, h_p_era = parse_pitcher_data(p_divs[1])
+            # Trim trailing throwing hand labels
+            if p_name.endswith((' R', ' L')):
+                p_name = p_name[:-2].strip()
+                
+            return p_name if p_name else "Unknown Pitcher", p_era
+
+        # 0 index is always Away Pitcher, 1 index is Home Pitcher
+        v_p_name, v_p_era = parse_pitcher(p_items[0])
+        h_p_name, h_p_era = parse_pitcher(p_items[1])
 
         print(f"   ⚾ {v_p_name} ({v_p_era} ERA) vs {h_p_name} ({h_p_era} ERA)")
 
-        u_lists = box.find_all('ul', class_='lineup__list')
+        # Target Lineup Rosters
+        u_lists = box.select('ul.lineup__list')
         if len(u_lists) >= 2:
-            # Visiting Lineup (Away) vs Home Pitcher
-            for li in u_lists[0].find_all('li', class_='lineup__player'):
+            # Visiting Batter Lineup faces Home Starting Pitcher
+            for li in u_lists[0].select('li.lineup__player'):
                 a = li.find('a')
                 if a:
-                    h_name = a.get('title', a.text).replace(' Stats', '').replace(' Statistics', '').strip()
+                    h_name = a.text.strip()
                     matchups.append({'Hitter': h_name, 'OppPitcher': h_p_name, 'ERA': h_p_era, 'Game': f"{v_team} @ {h_team}"})
 
-            # Home Lineup (Home) vs Visiting Pitcher (Away)
-            for li in u_lists[1].find_all('li', class_='lineup__player'):
+            # Home Batter Lineup faces Away Starting Pitcher
+            for li in u_lists[1].select('li.lineup__player'):
                 a = li.find('a')
                 if a:
-                    h_name = a.get('title', a.text).replace(' Stats', '').replace(' Statistics', '').strip()
+                    h_name = a.text.strip()
                     matchups.append({'Hitter': h_name, 'OppPitcher': v_p_name, 'ERA': v_p_era, 'Game': f"{v_team} @ {h_team}"})
 
     return pd.DataFrame(matchups)
