@@ -1,0 +1,26 @@
+# ⚾ MLB Daily Home Run Matchup Predictor
+
+An automated data pipeline that scrapes live MLB player trends and daily starting lineups to identify high-probability home run matchups. The system cross-references hitters on active multi-game hitting streaks against struggling starting pitchers and sends a styled, mobile-responsive dashboard summary straight to your inbox daily.
+
+## 🚀 Features
+
+*   **Automated Multi-Source Scraping:** Pulls live hitter streaks from *Baseball Musings* and active daily game lineups/pitcher stats from *RotoWire*.
+*   **Fuzzy Name Matching:** Uses `thefuzz` string matching to accurately pair hitters across different data sources regardless of minor naming discrepancies.
+*   **Tiered Alert System:** Automatically flags matchups based on specific hitting and pitching metrics:
+    *   💣 **ULTRA HR ALERT:** Hot hitters ($SLG \ge .600$ or 2+ HRs on streak) facing highly vulnerable pitchers ($ERA \ge 6.00$).
+    *   🔥 **HR POTENTIAL:** Clear mismatch favoring either the hot hitter or a struggling pitcher ($ERA \ge 4.00$).
+    *   ✅ **SOLID PICK:** Balanced premium hitting matchup meeting base criteria.
+*   **Serverless Deployment:** Runs completely free on a daily schedule using **GitHub Actions**—no local computer or server upkeep required.
+*   **Premium HTML Emails:** Delivers a clean, dark/light tailored email dashboard directly to a customized group subscription list via **SendGrid**.
+
+---
+
+## 🛠️ Project Structure
+
+```text
+HIT-STREAK/
+├── .github/
+│   └── workflows/
+│       └── run_scraper.yml    # GitHub Actions scheduling configuration
+├── hit_streak.py              # Main Python scraping & email pipeline
+└── requirements.txt           # Python package dependencies
