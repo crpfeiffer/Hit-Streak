@@ -54,19 +54,31 @@ def get_live_lineups():
         if len(p_divs) < 2: continue
 
         def parse_pitcher_data(div):
+            # Grab all structural text inside the pitcher block cleanly
             full_text = div.get_text(separator=" ", strip=True)
+            
+            # Extract ERA safely
             era_matches = re.findall(r'(\d*\.\d+)', full_text)
             p_era = float(era_matches[-1]) if era_matches else 0.0
 
-            # --- BULLETPROOF PITCHER NAME EXTRACTION ---
-            name_tag = div.find('a')
-            if name_tag:
-                raw_name = name_tag.get('title', name_tag.text)
-                p_name = raw_name.replace(' Stats', '').replace(' Statistics', '').strip()
+            # --- PARSE CLEAN PITCHER NAME FROM RAW TEXT BLOCK ---
+            # Remove common text data flags that crowd the name
+            clean_text = full_text.replace('Stats', '').replace('Statistics', '')
+            clean_text = clean_text.replace('Expected Starter', '').replace('Confirmed Starter', '').strip()
+            
+            # Split the string when a parenthesis or number starts (e.g., "Miles Mikolas R (5.59 ERA)")
+            parts = re.split(r'[\(\d]', clean_text)
+            base_name = parts[0].strip()
+            
+            # Clean off standalone throwing hand indicators (trailing 'R' or 'L' from "First Last R")
+            name_words = base_name.split()
+            if name_words and name_words[-1] in ['R', 'L'] and len(name_words) > 1:
+                p_name = " ".join(name_words[:-1])
             else:
-                p_name = re.split(r'[\(\d]', full_text)[0].strip()
+                p_name = base_name
 
-            if not p_name:
+            # Absolute final safety layout filter
+            if not p_name or len(p_name) < 3:
                 p_name = "Unknown Pitcher"
 
             return p_name, p_era
@@ -74,6 +86,7 @@ def get_live_lineups():
         v_p_name, v_p_era = parse_pitcher_data(p_divs[0])
         h_p_name, h_p_era = parse_pitcher_data(p_divs[1])
 
+        # Log it to the console so you can instantly verify names look good in GitHub's action log
         print(f"   ⚾ {v_p_name} ({v_p_era} ERA) vs {h_p_name} ({h_p_era} ERA)")
 
         u_lists = box.find_all('ul', class_='lineup__list')
