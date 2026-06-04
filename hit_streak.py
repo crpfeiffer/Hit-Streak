@@ -50,56 +50,62 @@ def get_live_lineups():
         v_team = teams[0].text.strip() if len(teams) > 0 else "VIS"
         h_team = teams[1].text.strip() if len(teams) > 1 else "HOME"
 
+        # Locate pitcher components explicitly
         p_divs = box.find_all('div', class_=re.compile('lineup__player-highlight'))
         if len(p_divs) < 2: continue
 
         def parse_pitcher_data(div):
-            # Grab all structural text inside the pitcher block cleanly
-            full_text = div.get_text(separator=" ", strip=True)
+            # 1. Isolate the name using an explicit tag tree fallback
+            p_name = ""
+            a_tag = div.find('a')
+            if a_tag:
+                # Read title attribute if present, otherwise read visible string text
+                raw_name = a_tag.get('title', a_tag.text)
+                p_name = raw_name.replace(' Stats', '').replace(' Statistics', '').strip()
             
-            # Extract ERA safely
-            era_matches = re.findall(r'(\d*\.\d+)', full_text)
-            p_era = float(era_matches[-1]) if era_matches else 0.0
+            # If no anchor link exists, scan child components or raw text nodes
+            if not p_name:
+                name_div = div.find('div', class_='lineup__player-name')
+                if name_div:
+                    p_name = name_div.text.strip()
+            
+            # Absolute text-processing fallback if layout patterns shift entirely
+            if not p_name:
+                full_text = div.get_text(separator=" ", strip=True)
+                clean_text = full_text.replace('Expected Starter', '').replace('Confirmed Starter', '')
+                parts = re.split(r'[\(\d]', clean_text)
+                p_name = parts[0].strip()
 
-            # --- PARSE CLEAN PITCHER NAME FROM RAW TEXT BLOCK ---
-            # Remove common text data flags that crowd the name
-            clean_text = full_text.replace('Stats', '').replace('Statistics', '')
-            clean_text = clean_text.replace('Expected Starter', '').replace('Confirmed Starter', '').strip()
-            
-            # Split the string when a parenthesis or number starts (e.g., "Miles Mikolas R (5.59 ERA)")
-            parts = re.split(r'[\(\d]', clean_text)
-            base_name = parts[0].strip()
-            
-            # Clean off standalone throwing hand indicators (trailing 'R' or 'L' from "First Last R")
-            name_words = base_name.split()
-            if name_words and name_words[-1] in ['R', 'L'] and len(name_words) > 1:
-                p_name = " ".join(name_words[:-1])
-            else:
-                p_name = base_name
+            # Clean off trailing hand indicators (' R' or ' L') safely if present
+            if p_name.endswith((' R', ' L')):
+                p_name = p_name[:-2].strip()
 
-            # Absolute final safety layout filter
             if not p_name or len(p_name) < 3:
                 p_name = "Unknown Pitcher"
+
+            # 2. Extract ERA safely using regular expression matching
+            full_text = div.get_text(separator=" ", strip=True)
+            era_matches = re.findall(r'(\d*\.\d+)', full_text)
+            p_era = float(era_matches[-1]) if era_matches else 0.0
 
             return p_name, p_era
 
         v_p_name, v_p_era = parse_pitcher_data(p_divs[0])
         h_p_name, h_p_era = parse_pitcher_data(p_divs[1])
 
-        # Log it to the console so you can instantly verify names look good in GitHub's action log
         print(f"   ⚾ {v_p_name} ({v_p_era} ERA) vs {h_p_name} ({h_p_era} ERA)")
 
         u_lists = box.find_all('ul', class_='lineup__list')
         if len(u_lists) >= 2:
-            # Visiting Lineup vs Home Pitcher
-            for li in u_lists[0].find_all('li'):
+            # Visiting Lineup (Away) vs Home Pitcher
+            for li in u_lists[0].find_all('li', class_='lineup__player'):
                 a = li.find('a')
                 if a:
                     h_name = a.get('title', a.text).replace(' Stats', '').replace(' Statistics', '').strip()
                     matchups.append({'Hitter': h_name, 'OppPitcher': h_p_name, 'ERA': h_p_era, 'Game': f"{v_team} @ {h_team}"})
 
-            # Home Lineup vs Visiting Pitcher
-            for li in u_lists[1].find_all('li'):
+            # Home Lineup (Home) vs Visiting Pitcher (Away)
+            for li in u_lists[1].find_all('li', class_='lineup__player'):
                 a = li.find('a')
                 if a:
                     h_name = a.get('title', a.text).replace(' Stats', '').replace(' Statistics', '').strip()
@@ -115,12 +121,11 @@ def send_email(html_content):
         print("⚠️ Missing email configuration variables. Skipping email.")
         return
 
-    # Clean and split the email addresses
     recipient_list = [email.strip() for email in to_email_string.split(',') if email.strip()]
 
     message = Mail(
-        from_email=recipient_list[0],  # Verified single sender identity
-        to_emails=recipient_list,      # Distribute to your whole group list
+        from_email=recipient_list[0],  
+        to_emails=recipient_list,      
         subject='💣 Daily MLB HR Alerts & Matchups',
         html_content=html_content
     )
@@ -135,7 +140,6 @@ def run_app():
     df_s = get_live_streaks()
     df_l = get_live_lineups()
 
-    # --- HTML / CSS Newsletters Formatting Layout ---
     email_html = """
     <html>
     <head>
