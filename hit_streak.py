@@ -87,7 +87,7 @@ def get_live_lineups():
 
     return pd.DataFrame(matchups)
 
-def send_email(content):
+def send_email(html_content):
     api_key = os.environ.get('SENDGRID_API_KEY')
     to_email_string = os.environ.get('MY_EMAIL')
     
@@ -95,17 +95,14 @@ def send_email(content):
         print("⚠️ Missing email configuration variables. Skipping email.")
         return
 
-    # Clean up the email string and handle multiple emails if they exist
-    # This splits them by commas and removes any accidental spaces
+    # Split recipient list safely via commas
     recipient_list = [email.strip() for email in to_email_string.split(',') if email.strip()]
 
-    # SendGrid prefers the first email in the list as the primary 'to', 
-    # and the rest can be passed cleanly.
     message = Mail(
-        from_email=recipient_list[0],  # Must be your verified SendGrid sender address
-        to_emails=recipient_list,      # Handles a single email or a list of emails perfectly
+        from_email=recipient_list[0],  # Must match your verified SendGrid identity
+        to_emails=recipient_list,      # Dynamic array of recipients
         subject='💣 Daily MLB HR Alerts & Matchups',
-        html_content=f"<pre style='font-family: monospace;'>{content}</pre>"
+        html_content=html_content
     )
     try:
         sg = SendGridAPIClient(api_key)
@@ -118,7 +115,7 @@ def run_app():
     df_s = get_live_streaks()
     df_l = get_live_lineups()
 
-    # --- Start building HTML Email Styling ---
+    # --- Start building HTML Layout and Embedded CSS UI ---
     email_html = """
     <html>
     <head>
@@ -161,7 +158,6 @@ def run_app():
                         is_hr_threat = s['Slug'] >= HR_SLUG_THRESHOLD or s['HR'] >= 2
                         is_bad_pitcher = l['ERA'] >= 6.00
 
-                        # Determine Badge Style and Status Label
                         if is_hr_threat and is_bad_pitcher:
                             badge_class = "badge-ultra"
                             status_text = "💣💣 ULTRA HR ALERT 💣💣"
@@ -174,7 +170,6 @@ def run_app():
 
                         slug_str = "{:.3f}".format(s['Slug']).lstrip('0')
                         
-                        # Append a clean HTML block for this card
                         email_html += f"""
                         <div class="matchup-card">
                             <span class="badge {badge_class}">{status_text}</span>
@@ -194,7 +189,6 @@ def run_app():
         </div>
         """
 
-    # Close layout tags
     email_html += """
             <div class="footer">
                 Automated Analytics System • Generated via GitHub Actions
@@ -206,3 +200,6 @@ def run_app():
 
     print(f"📊 Processed job. Matches found: {found_count}. Preparing transmission...")
     send_email(email_html)
+
+if __name__ == "__main__":
+    run_app()
