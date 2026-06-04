@@ -58,7 +58,7 @@ def get_live_lineups():
             era_matches = re.findall(r'(\d*\.\d+)', full_text)
             p_era = float(era_matches[-1]) if era_matches else 0.0
 
-            # --- FIX FOR MISSING PITCHER NAMES ---
+            # --- BULLETPROOF PITCHER NAME EXTRACTION ---
             name_tag = div.find('a')
             if name_tag:
                 raw_name = name_tag.get('title', name_tag.text)
@@ -78,16 +78,18 @@ def get_live_lineups():
 
         u_lists = box.find_all('ul', class_='lineup__list')
         if len(u_lists) >= 2:
+            # Visiting Lineup vs Home Pitcher
             for li in u_lists[0].find_all('li'):
                 a = li.find('a')
                 if a:
-                    h_name = a.get('title', a.text).split(' Stats')[0].strip()
+                    h_name = a.get('title', a.text).replace(' Stats', '').replace(' Statistics', '').strip()
                     matchups.append({'Hitter': h_name, 'OppPitcher': h_p_name, 'ERA': h_p_era, 'Game': f"{v_team} @ {h_team}"})
 
+            # Home Lineup vs Visiting Pitcher
             for li in u_lists[1].find_all('li'):
                 a = li.find('a')
                 if a:
-                    h_name = a.get('title', a.text).split(' Stats')[0].strip()
+                    h_name = a.get('title', a.text).replace(' Stats', '').replace(' Statistics', '').strip()
                     matchups.append({'Hitter': h_name, 'OppPitcher': v_p_name, 'ERA': v_p_era, 'Game': f"{v_team} @ {h_team}"})
 
     return pd.DataFrame(matchups)
@@ -100,11 +102,12 @@ def send_email(html_content):
         print("⚠️ Missing email configuration variables. Skipping email.")
         return
 
+    # Clean and split the email addresses
     recipient_list = [email.strip() for email in to_email_string.split(',') if email.strip()]
 
     message = Mail(
-        from_email=recipient_list[0],  
-        to_emails=recipient_list,      
+        from_email=recipient_list[0],  # Verified single sender identity
+        to_emails=recipient_list,      # Distribute to your whole group list
         subject='💣 Daily MLB HR Alerts & Matchups',
         html_content=html_content
     )
@@ -119,6 +122,7 @@ def run_app():
     df_s = get_live_streaks()
     df_l = get_live_lineups()
 
+    # --- HTML / CSS Newsletters Formatting Layout ---
     email_html = """
     <html>
     <head>
