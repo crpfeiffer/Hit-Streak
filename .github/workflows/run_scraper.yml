@@ -1,0 +1,29 @@
+name: Daily MLB Scraper Email
+
+on:
+  schedule:
+    # This runs every day at 14:00 UTC (10:00 AM Eastern / 7:00 AM Pacific)
+    - cron: '0 14 * * *'
+  workflow_dispatch: # This adds a manual "Run" button in GitHub for testing
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Scraper and Send Email
+        env:
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          MY_EMAIL: ${{ secrets.MY_EMAIL }}
+        run: python hit_streak.py
