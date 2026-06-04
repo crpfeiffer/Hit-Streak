@@ -89,17 +89,21 @@ def get_live_lineups():
 
 def send_email(content):
     api_key = os.environ.get('SENDGRID_API_KEY')
-    to_email = os.environ.get('MY_EMAIL')
+    to_email_string = os.environ.get('MY_EMAIL')
     
-    if not api_key or not to_email:
+    if not api_key or not to_email_string:
         print("⚠️ Missing email configuration variables. Skipping email.")
         return
 
-    # If you want to send to multiple people, you can turn this into a list: 
-    # to_emails=["your_email@gmail.com", "friend@gmail.com"]
+    # Clean up the email string and handle multiple emails if they exist
+    # This splits them by commas and removes any accidental spaces
+    recipient_list = [email.strip() for email in to_email_string.split(',') if email.strip()]
+
+    # SendGrid prefers the first email in the list as the primary 'to', 
+    # and the rest can be passed cleanly.
     message = Mail(
-        from_email=to_email,  
-        to_emails=to_email,   
+        from_email=recipient_list[0],  # Must be your verified SendGrid sender address
+        to_emails=recipient_list,      # Handles a single email or a list of emails perfectly
         subject='💣 Daily MLB HR Alerts & Matchups',
         html_content=f"<pre style='font-family: monospace;'>{content}</pre>"
     )
